@@ -1,29 +1,31 @@
-# Conditionally include Pico SDK for non-host builds
-if (NOT (DEFINED PICO_PLATFORM AND PICO_PLATFORM STREQUAL "host"))
+
     # == DO NOT EDIT THE FOLLOWING LINES for the Raspberry Pi Pico VS Code Extension to work ==
     if (WIN32)
         set(USERHOME $ENV{USERPROFILE})
     else ()
         set(USERHOME $ENV{HOME})
     endif ()
-    set(sdkVersion 2.1.1)
+    set(sdkVersion 2.2.0)
     set(toolchainVersion 14_2_Rel1)
-    set(picotoolVersion 2.1.1)
+    set(picotoolVersion 2.2.0)
     set(picoVscode ${USERHOME}/.pico-sdk/cmake/pico-vscode.cmake)
     if (EXISTS ${picoVscode})
         include(${picoVscode})
     endif ()
     # ====================================================================================
+set(PICO_BOARD pico2 CACHE STRING "Board type")
 
     cmake_minimum_required(VERSION 3.22)
     include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
-else()
-    cmake_minimum_required(VERSION 3.22)
-endif()
 
 project(286 C CXX ASM)
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_CXX_STANDARD 20)
+
+set(m1p2 ON)
+set(ENABLE_VGA ON)
+set(ENABLE_PWM_SOUND ON)
+set(TOTAL_VIRTUAL_MEMORY_KBS 4096)
 
 # =========================
 # OUTPUT DIRECTORIES
@@ -185,6 +187,11 @@ else ()
         set(BUILD_NAME "${BUILD_NAME}-HW")
     endif ()
 
+    if (m1p2)
+        pico_set_linker_script(${PROJECT_NAME} "${CMAKE_SOURCE_DIR}/memmap.ld")
+        set(BUILD_NAME "m1p2-${BUILD_NAME}.m1p2")
+    endif ()
+
     # Add PSRAM or Virtual Memory info
     if (USE_VIRTUAL_MEMORY_INSTEAD_OF_PSRAM)
         set(BUILD_NAME "${BUILD_NAME}-SWAP${TOTAL_VIRTUAL_MEMORY_KBS}KB")
@@ -314,6 +321,7 @@ else ()
 
     pico_add_extra_outputs(${PROJECT_NAME})
 endif ()
+
 
 # =========================
 # COMMON DEFINITIONS (HOST + PICO)
