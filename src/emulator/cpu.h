@@ -194,7 +194,7 @@ extern union _bytewordregs_ regs;
 
 extern uint16_t segregs[6];
 #define CPU_DS segregs[regds]
-#define CPU_ES segregs[regds]
+#define CPU_ES segregs[reges]
 #define CPU_SI segregs[regsi]
 #define CPU_DI segregs[regdi]
 #endif
