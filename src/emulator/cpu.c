@@ -2281,7 +2281,7 @@ void cpu_int15_handler() {
 	}
 }
 
-FUNC_INLINE void old_int_call(uint8_t intnum) {
+FUNC_INLINE void cpu_intcall(uint8_t intnum, uint8_t source, uint32_t err) {
     switch (intnum) {
         case 0x10: {
             switch (CPU_AH) {
@@ -2522,10 +2522,8 @@ FUNC_INLINE void old_int_call(uint8_t intnum) {
             }
             break;
     }
-}
 
-FUNC_INLINE void cpu_intcall(uint8_t intnum, uint8_t source, uint32_t err) {
-	old_int_call(intnum);
+
 	uint32_t idtentry, idtptr, gdtentry, new_esp, old_esp, old_flags, push_eip;
 	uint16_t selector, idtseg, new_ss, old_ss;
 	uint8_t access, gatetype, dpl, present;
