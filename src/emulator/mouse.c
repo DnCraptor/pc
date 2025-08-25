@@ -1,4 +1,5 @@
 #include "emulator.h"
+#include <string.h>
 
 static struct sermouse_s {
     uint8_t registers[8];

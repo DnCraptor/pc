@@ -193,10 +193,10 @@ static inline bool redirector_handler() {
             const int result = rmdir(path); // TODO recursive remove
             if (result == 0) {
                 CPU_AX = 0;
-                CPU_FL_CF = 0;
+                cf = 0;
             } else {
                 CPU_AX = 5; // Access denied (typical for rmdir failure)
-                CPU_FL_CF = 1;
+                cf = 1;
             }
         }
         break;
@@ -208,10 +208,10 @@ static inline bool redirector_handler() {
             const int result = mkdir(path, 0777);
             if (result == 0) {
                 CPU_AX = 0;
-                CPU_FL_CF = 0;
+                cf = 0;
             } else {
                 CPU_AX = 3; // Path isn't found (typical for mkdir failure)
-                CPU_FL_CF = 1;
+                cf = 1;
             }
         }
         break;
@@ -235,7 +235,7 @@ static inline bool redirector_handler() {
 
             debug_log("Current remote dir set to: '%s'\n", current_remote_dir);
             CPU_AX = 0;
-            CPU_FL_CF = 0;
+            cf = 0;
         }
         break;
 
@@ -250,10 +250,10 @@ static inline bool redirector_handler() {
                 sftptr->total_handles = 0xffff;
                 open_files[file_handle] = NULL;
                 CPU_AX = 0;
-                CPU_FL_CF = 0;
+                cf = 0;
             } else {
                 CPU_AX = 6; // Invalid handle
-                CPU_FL_CF = 1;
+                cf = 1;
             }
         }
         break;
@@ -271,7 +271,7 @@ static inline bool redirector_handler() {
                 if (fseek(open_files[file_handle], sftptr->file_position, SEEK_SET) != 0) {
                     debug_log("Seek error to position %ld\n", sftptr->file_position);
                     CPU_AX = 6; // Invalid handle or seek error
-                    CPU_FL_CF = 1;
+                    cf = 1;
                     break;
                 }
 
@@ -283,10 +283,10 @@ static inline bool redirector_handler() {
                 sftptr->file_position += bytes_read;
                 CPU_AX = 0;
                 CPU_CX = bytes_read;
-                CPU_FL_CF = 0;
+                cf = 0;
             } else {
                 CPU_AX = 6; // Invalid handle
-                CPU_FL_CF = 1;
+                cf = 1;
             }
         }
         break;
@@ -304,7 +304,7 @@ static inline bool redirector_handler() {
                 if (fseek(open_files[file_handle], sftptr->file_position, SEEK_SET) != 0) {
                     debug_log("Write seek error to position %ld\n", sftptr->file_position);
                     CPU_AX = 6; // Invalid handle or seek error
-                    CPU_FL_CF = 1;
+                    cf = 1;
                     break;
                 }
 
@@ -316,10 +316,10 @@ static inline bool redirector_handler() {
                 sftptr->file_position += bytes_written;
                 fflush(open_files[file_handle]); // Ensure data is written to disk
                 CPU_CX = bytes_written; // RBIL6: return bytes written in CX, not AX
-                CPU_FL_CF = 0;
+                cf = 0;
             } else {
                 CPU_AX = 6; // Invalid handle
-                CPU_FL_CF = 1;
+                cf = 1;
             }
         }
         break;
@@ -340,10 +340,10 @@ static inline bool redirector_handler() {
             int result = rename(old_path, new_path);
             if (result == 0) {
                 CPU_AX = 0;
-                CPU_FL_CF = 0;
+                cf = 0;
             } else {
                 CPU_AX = 5; // Access denied (typical for rename failure)
-                CPU_FL_CF = 1;
+                cf = 1;
             }
         }
         break;
@@ -354,10 +354,10 @@ static inline bool redirector_handler() {
             int result = unlink(path);
             if (result == 0) {
                 CPU_AX = 0;
-                CPU_FL_CF = 0;
+                cf = 0;
             } else {
                 CPU_AX = 2; // File not found (typical for unlink failure)
-                CPU_FL_CF = 1;
+                cf = 1;
             }
         }
         break;
@@ -411,16 +411,16 @@ static inline bool redirector_handler() {
                     sftptr->unk4 = 0xff;
 
                     CPU_AX = 0;
-                    CPU_FL_CF = 0;
+                    cf = 0;
                 } else {
                     debug_log("not found\n");
                     CPU_AX = 2; // File not found
-                    CPU_FL_CF = 1;
+                    cf = 1;
                 }
             } else {
                 debug_log("too many open files\n");
                 CPU_AX = 4; // Too many open files
-                CPU_FL_CF = 1;
+                cf = 1;
             }
         }
         break;
@@ -463,21 +463,21 @@ static inline bool redirector_handler() {
                     sftptr->unk4 = 0xff;
 
                     CPU_AX = 0;
-                    CPU_FL_CF = 0;
+                    cf = 0;
                 } else {
                     CPU_AX = 3; // Path not found
-                    CPU_FL_CF = 1;
+                    cf = 1;
                 }
             } else {
                 CPU_AX = 4; // Too many open files
-                CPU_FL_CF = 1;
+                cf = 1;
             }
         }
         break;
         // Lock/Unlock File Region (stub implementation)
         case 0x110A:
             CPU_AX = 0;
-            CPU_FL_CF = 0;
+            cf = 0;
             break;
 
         // Get Disk Information (stub implementation)
@@ -487,14 +487,14 @@ static inline bool redirector_handler() {
             CPU_BX = 4096;
             CPU_CX = 4096;
             CPU_DX = 4096;
-            CPU_FL_CF = 0;
+            cf = 0;
         }
         break;
 
         // Set File Attributes (stub implementation)
         case 0x110e:
             CPU_AX = 0;
-            CPU_FL_CF = 0;
+            cf = 0;
             break;
 
         // Get File Attributes and Size
@@ -509,7 +509,7 @@ static inline bool redirector_handler() {
             struct stat file_info;
             if (stat(path, &file_info)) {
                 CPU_AX = 2; // Not found
-                CPU_FL_CF = 1;
+                cf = 1;
             } else {
                 // Convert POSIX file attributes to DOS attributes
                 uint16_t dos_attributes = 0x20;
@@ -529,7 +529,7 @@ static inline bool redirector_handler() {
                 CPU_DI = file_info.st_size & 0xFFFF; // Low word
                 CPU_CX = 0x1000; // Default time stamp
                 CPU_DX = 0x1000; // Default date stamp
-                CPU_FL_CF = 0;
+                cf = 0;
             }
         }
         break;
@@ -557,11 +557,11 @@ static inline bool redirector_handler() {
 
                 // Other attributes can be set here if needed
                 CPU_AX = 0;
-                CPU_FL_CF = 0;
+                cf = 0;
             } else {
                 debug_log("error finding file: '%s'\n", path);
                 CPU_AX = 18; // No more files
-                CPU_FL_CF = 1;
+                cf = 1;
             }
         }
         break;
@@ -582,11 +582,11 @@ static inline bool redirector_handler() {
                 dta_ptr->foundfile.start_clstr = 0;
 
                 CPU_AX = 0;
-                CPU_FL_CF = 0;
+                cf = 0;
             } else {
                 debug_log("no more files for: '%s'\n", path);
                 CPU_AX = 18; // No more files
-                CPU_FL_CF = 1;
+                cf = 1;
             }
         }
         break;
@@ -599,7 +599,7 @@ static inline bool redirector_handler() {
                 }
             }
             CPU_AX = 0;
-            CPU_FL_CF = 0;
+            cf = 0;
             break;
 
         // Seek from File End
@@ -616,14 +616,14 @@ static inline bool redirector_handler() {
                 // Get current file size
                 if (fseek(open_files[file_handle], 0, SEEK_END) != 0) {
                     CPU_AX = 6; // Invalid handle
-                    CPU_FL_CF = 1;
+                    cf = 1;
                     break;
                 }
 
                 long file_size = ftell(open_files[file_handle]);
                 if (file_size == -1) {
                     CPU_AX = 6; // Invalid handle
-                    CPU_FL_CF = 1;
+                    cf = 1;
                     break;
                 }
 
@@ -638,7 +638,7 @@ static inline bool redirector_handler() {
                 // Seek to new position
                 if (fseek(open_files[file_handle], new_position, SEEK_SET) != 0) {
                     CPU_AX = 6; // Invalid handle
-                    CPU_FL_CF = 1;
+                    cf = 1;
                     break;
                 }
 
@@ -646,13 +646,13 @@ static inline bool redirector_handler() {
                 sftptr->file_position = new_position;
                 CPU_DX = (new_position >> 16) & 0xFFFF; // High word
                 CPU_AX = new_position & 0xFFFF; // Low word
-                CPU_FL_CF = 0;
+                cf = 0;
 
                 debug_log("Seek result: new position %ld (DX:AX = %04X:%04X)\n",
                           new_position, CPU_DX, CPU_AX);
             } else {
                 CPU_AX = 6; // Invalid handle
-                CPU_FL_CF = 1;
+                cf = 1;
             }
         }
         break;

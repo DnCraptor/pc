@@ -115,11 +115,11 @@ cmake -DCMAKE_BUILD_TYPE=Release -DPICO_PLATFORM=rp2040 -DENABLE_TFT=ON -DENABLE
 See `README.md` for a more detailed explanation.
 
 **Pico (Dual-Core)**:
-- **Core 0**: Runs the `exec86()` emulation loop and handles input.
+- **Core 0**: Runs the `cpu_exec()` emulation loop and handles input.
 - **Core 1**: Manages real-time tasks: rendering, audio, and PIT timer interrupts.
 
 **Host - Windows & Linux (Multi-threaded)**:
-- **Main thread**: Runs `exec86()` and manages the window.
+- **Main thread**: Runs `cpu_exec()` and manages the window.
 - **Ticks thread**: Simulates hardware timers for interrupts, rendering, and audio generation.
 - **Sound thread**: Handles audio output to the OS.
 

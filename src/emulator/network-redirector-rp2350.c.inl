@@ -12,9 +12,9 @@
 #define debug_log(...)
 #endif
 
-// Convert FatFS FRESULT to DOS error codes according to RBIL6, sets CPU_AX and CPU_FL_CF
+// Convert FatFS FRESULT to DOS error codes according to RBIL6, sets CPU_AX and cf
 static void fresult_to_dos_error(const FRESULT fr) {
-    CPU_FL_CF = fr == FR_OK ? 0 : 1;
+    cf = fr == FR_OK ? 0 : 1;
     switch (fr) {
         case FR_OK:                   CPU_AX = 0;   break; // Success
         case FR_NO_FILE:              CPU_AX = 2;   break; // File not found
@@ -263,7 +263,7 @@ static inline bool redirector_handler() {
 
             debug_log("Current remote dir set to: '%s'\n", current_remote_dir);
             CPU_AX = 0;
-            CPU_FL_CF = 0;
+            cf = 0;
         }
         break;
         case 0x1107: // Commit Remote File
@@ -277,10 +277,10 @@ static inline bool redirector_handler() {
                 writew86(sft_addr + offsetof(sftstruct, total_handles), 0xffff);
                 open_files[file_handle] = NULL;
                 CPU_AX = 0;
-                CPU_FL_CF = 0;
+                cf = 0;
             } else {
                 CPU_AX = 6; // Invalid handle
-                CPU_FL_CF = 1;
+                cf = 1;
             }
         }
         break;
@@ -319,10 +319,10 @@ static inline bool redirector_handler() {
                 writedw86(sft_addr + offsetof(sftstruct, file_position), file_pos + total_bytes_read);
                 CPU_AX = 0;
                 CPU_CX = total_bytes_read;
-                CPU_FL_CF = 0;
+                cf = 0;
             } else {
                 CPU_AX = 6; // Invalid handle
-                CPU_FL_CF = 1;
+                cf = 1;
             }
         }
         break;
@@ -360,10 +360,10 @@ static inline bool redirector_handler() {
                 writedw86(sft_addr + offsetof(sftstruct, file_position), file_pos + total_bytes_written);
                 f_sync(open_files[file_handle]);
                 CPU_CX = total_bytes_written;
-                CPU_FL_CF = 0;
+                cf = 0;
             } else {
                 CPU_AX = 6; // Invalid handle
-                CPU_FL_CF = 1;
+                cf = 1;
             }
         }
         break;
@@ -402,7 +402,7 @@ static inline bool redirector_handler() {
                 open_files[file_handle] = malloc(sizeof(FIL));
                 if (!open_files[file_handle]) {
                     CPU_AX = 4; // Too many open files (or out of memory)
-                    CPU_FL_CF = 1;
+                    cf = 1;
                     break;
                 }
                 FRESULT res = f_open(open_files[file_handle], path, FA_READ | FA_WRITE);
@@ -433,7 +433,7 @@ static inline bool redirector_handler() {
                     for(int i=0; i<sizeof(sft); i++) write86(sft_addr + i, ((uint8_t*)&sft)[i]);
 
                     CPU_AX = 0;
-                    CPU_FL_CF = 0;
+                    cf = 0;
                 } else {
                     free(open_files[file_handle]);
                     open_files[file_handle] = NULL;
@@ -441,7 +441,7 @@ static inline bool redirector_handler() {
                 }
             } else {
                 CPU_AX = 4; // Too many open files
-                CPU_FL_CF = 1;
+                cf = 1;
             }
         }
         break;
@@ -456,7 +456,7 @@ static inline bool redirector_handler() {
                 open_files[file_handle] = malloc(sizeof(FIL));
                 if (!open_files[file_handle]) {
                     CPU_AX = 4; // Too many open files (or out of memory)
-                    CPU_FL_CF = 1;
+                    cf = 1;
                     break;
                 }
 
@@ -485,7 +485,7 @@ static inline bool redirector_handler() {
                     for(int i=0; i<sizeof(sft); i++) write86(sft_addr + i, ((uint8_t*)&sft)[i]);
 
                     CPU_AX = 0;
-                    CPU_FL_CF = 0;
+                    cf = 0;
                 } else {
                     free(open_files[file_handle]);
                     open_files[file_handle] = NULL;
@@ -493,14 +493,14 @@ static inline bool redirector_handler() {
                 }
             } else {
                 CPU_AX = 4; // Too many open files
-                CPU_FL_CF = 1;
+                cf = 1;
             }
         }
         break;
 
         case 0x110A: // Lock/Unlock Region
             CPU_AX = 0;
-            CPU_FL_CF = 0;
+            cf = 0;
             break;
 
         case 0x110C: // TODO: Get Disk Information
@@ -509,13 +509,13 @@ static inline bool redirector_handler() {
             CPU_BX = 512;
             CPU_CX = 512;
             CPU_DX = 512;
-            CPU_FL_CF = 0;
+            cf = 0;
         }
         break;
 
         case 0x110e: // TODO: Set File Attributes
             CPU_AX = 0;
-            CPU_FL_CF = 0;
+            cf = 0;
             break;
 
         case 0x110F: {
@@ -539,7 +539,7 @@ static inline bool redirector_handler() {
                 CPU_DI = file_info.fsize & 0xFFFF; // Low word
                 CPU_CX = file_info.ftime;
                 CPU_DX = file_info.fdate;
-                CPU_FL_CF = 0;
+                cf = 0;
             }
         }
         break;
@@ -582,13 +582,13 @@ static inline bool redirector_handler() {
 
                 for(int i=0; i<sizeof(sdb); i++) write86(dta_addr + i, ((uint8_t*)&sdb)[i]);
 
-                CPU_FL_CF = 0;
+                cf = 0;
             } else {
                 debug_log("no files found for '%s' in '%s': %i\n", new_path, path, find_result);
 
                 if (FR_OK == find_result) {
                     CPU_AX = 18; // No more files
-                    CPU_FL_CF = 1;
+                    cf = 1;
                 }  else {
                     fresult_to_dos_error(find_result);
                 }
@@ -611,13 +611,13 @@ static inline bool redirector_handler() {
 
                 for(int i=0; i<sizeof(sdb); i++) write86(dta_addr + i, ((uint8_t*)&sdb)[i]);
 
-                CPU_FL_CF = 0;
+                cf = 0;
             } else {
                 debug_log("no more files found for '%s' in '%s': %i\n", path, find_result);
 
                 if (FR_OK == find_result) {
                     CPU_AX = 18; // No more files
-                    CPU_FL_CF = 1;
+                    cf = 1;
                 }  else {
                     fresult_to_dos_error(find_result);
                 }
@@ -632,7 +632,7 @@ static inline bool redirector_handler() {
                 }
             }
             CPU_AX = 0;
-            CPU_FL_CF = 0;
+            cf = 0;
             break;
 
         case 0x1121: // Seek from File End
@@ -658,12 +658,12 @@ static inline bool redirector_handler() {
                 writedw86(sft_addr + offsetof(sftstruct, file_position), new_position);
                 CPU_DX = (new_position >> 16) & 0xFFFF;
                 CPU_AX = new_position & 0xFFFF;
-                CPU_FL_CF = 0;
+                cf = 0;
 
                 debug_log("Seek result: new position %ld (DX:AX = %04X:%04X)\n", new_position, CPU_DX, CPU_AX);
             } else {
                 CPU_AX = 6; // Invalid handle
-                CPU_FL_CF = 1;
+                cf = 1;
             }
         }
         break;

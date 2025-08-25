@@ -141,7 +141,7 @@ static void readdisk(uint8_t drivenum,
 //        printf("no media %i\r\n", drivenum);
         CPU_AH = 0x31;    // no media in drive
         CPU_AL = 0;
-        CPU_FL_CF = 1;
+        cf = 1;
         return;
     }
 
@@ -150,7 +150,7 @@ static void readdisk(uint8_t drivenum,
 //        printf("sector not found\r\n");
         CPU_AH = 0x04;    // sector not found
         CPU_AL = 0;
-        CPU_FL_CF = 1;
+        cf = 1;
         return;
     }
 
@@ -162,7 +162,7 @@ static void readdisk(uint8_t drivenum,
 //        printf("sector not found\r\n");
         CPU_AH = 0x04;    // sector not found
         CPU_AL = 0;
-        CPU_FL_CF = 1;
+        cf = 1;
         return;
     }
 
@@ -176,7 +176,7 @@ static void readdisk(uint8_t drivenum,
 //            printf("Disk read error on drive %i\r\n", drivenum);
             CPU_AH = 0x04;    // sector not found
             CPU_AL = 0;
-            CPU_FL_CF = 1;
+            cf = 1;
             return;
         }
 
@@ -186,7 +186,7 @@ static void readdisk(uint8_t drivenum,
                 if (read86(memdest++) != sectorbuffer[sectoffset]) {
                     // Sector verify failed
                     CPU_AL = cursect;
-                    CPU_FL_CF = 1;
+                    cf = 1;
                     CPU_AH = 0xBB;    // sector verify failed error code
                     return;
                 }
@@ -206,13 +206,13 @@ static void readdisk(uint8_t drivenum,
     if (cursect == 0) {
         CPU_AH = 0x04;    // sector not found
         CPU_AL = 0;
-        CPU_FL_CF = 1;
+        cf = 1;
         return;
     }
 
     // Set success flags
     CPU_AL = cursect;
-    CPU_FL_CF = 0;
+    cf = 0;
     CPU_AH = 0;
 }
 
@@ -228,7 +228,7 @@ static void writedisk(uint8_t drivenum,
     if (!disk[drivenum].inserted) {
         CPU_AH = 0x31;    // no media in drive
         CPU_AL = 0;
-        CPU_FL_CF = 1;
+        cf = 1;
         return;
     }
 
@@ -243,7 +243,7 @@ static void writedisk(uint8_t drivenum,
             ) {
         CPU_AH = 0x04;    // sector not found
         CPU_AL = 0;
-        CPU_FL_CF = 1;
+        cf = 1;
         return;
     }
 
@@ -251,7 +251,7 @@ static void writedisk(uint8_t drivenum,
     if (disk[drivenum].readonly) {
         CPU_AH = 0x03;    // drive is read-only
         CPU_AL = 0;
-        CPU_FL_CF = 1;
+        cf = 1;
         return;
     }
 
@@ -275,13 +275,13 @@ static void writedisk(uint8_t drivenum,
     if (sectcount && cursect == 0) {
         CPU_AH = 0x04;    // sector not found
         CPU_AL = 0;
-        CPU_FL_CF = 1;
+        cf = 1;
         return;
     }
 
     // Set success flags
     CPU_AL = cursect;
-    CPU_FL_CF = 0;
+    cf = 0;
     CPU_AH = 0;
 }
 
@@ -298,16 +298,16 @@ static INLINE void diskhandler() {
         case 0x00:  // Reset disk system
             if (disk[drivenum].inserted) {
                 CPU_AH = 0;
-                CPU_FL_CF = 0;  // Successful reset (no-op in emulator)
+                cf = 0;  // Successful reset (no-op in emulator)
             } else {
 
-                CPU_FL_CF = 1;  // Disk not inserted
+                cf = 1;  // Disk not inserted
             }
             break;
 
         case 0x01:  // Return last status
             CPU_AH = lastdiskah[drivenum];
-            CPU_FL_CF = lastdiskcf[drivenum];
+            cf = lastdiskcf[drivenum];
 //            printf("disk not inserted %i", drivenum);
             return;
 
@@ -338,13 +338,13 @@ static INLINE void diskhandler() {
             break;
 
         case 0x05:  // Format track
-            CPU_FL_CF = 0;  // Success (no-op for emulator)
+            cf = 0;  // Success (no-op for emulator)
             CPU_AH = 0;
             break;
 
         case 0x08:  // Get drive parameters
             if (disk[drivenum].inserted) {
-                CPU_FL_CF = 0;
+                cf = 0;
                 CPU_AH = 0;
                 CPU_CH = disk[drivenum].cyls - 1;
                 CPU_CL = (disk[drivenum].sects & 63) + ((disk[drivenum].cyls / 256) * 64);
@@ -358,19 +358,19 @@ static INLINE void diskhandler() {
                     CPU_DL = hdcount;  // Hard disk
                 }
             } else {
-                CPU_FL_CF = 1;
+                cf = 1;
                 CPU_AH = 0xAA;  // Error code for no disk inserted
             }
             break;
 
         default:  // Unknown function requested
-            CPU_FL_CF = 1;  // Error
+            cf = 1;  // Error
             break;
     }
 
     // Update last disk status
     lastdiskah[drivenum] = CPU_AH;
-    lastdiskcf[drivenum] = CPU_FL_CF;
+    lastdiskcf[drivenum] = cf;
 
     // Set the last status in BIOS Data Area (for hard drives)
     if (CPU_DL & 0x80) {

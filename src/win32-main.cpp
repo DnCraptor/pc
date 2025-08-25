@@ -1175,13 +1175,13 @@ int main(int argc, char **argv) {
     emu8950_opl = OPL_new(3579552, SOUND_FREQUENCY);
     blaster_reset();
     sn76489_reset();
-    reset86();
+    cpu_reset();
 
     CreateThread(NULL, 0, SoundThread, NULL, 0, NULL);
     CreateThread(NULL, 0, TicksThread, NULL, 0, NULL);
 
     while (true) {
-        exec86(32768);
+        cpu_exec(32768);
         if (mfb_update(SCREEN, 0) == -1)
             exit(1);
 

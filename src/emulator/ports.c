@@ -158,8 +158,8 @@ void portout(uint16_t portnum, uint16_t value) {
 
 // A20 Gate
         case 0x92:
-            a20_enabled = value & 1;
-            printf("A20 W: %d\n", a20_enabled);
+            a20_gate = value & 1;
+            printf("A20 W: %d\n", a20_gate);
             return;
 // Tandy 3-Voice Sound
         case 0x1E0:
@@ -421,8 +421,8 @@ uint16_t portin(uint16_t portnum) {
             return i8237_readpage(portnum);
 // A20 Gate
         case 0x92:
-            printf("A20 R: %d\n", a20_enabled);
-            return a20_enabled;
+            printf("A20 R: %d\n", a20_gate);
+            return a20_gate;
         case 0x201:
 // Joystick
             return joystick_in();

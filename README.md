@@ -211,7 +211,7 @@ The emulator uses different architectures depending on the target platform to be
 
 ### Raspberry Pi Pico (Dual-Core)
 The Pico build takes full advantage of the RP2040/RP2350's dual-core processor.
-*   **Core 0:** Runs the main CPU emulation loop (`exec86`) and handles user input from the PS/2 keyboard and NES gamepad.
+*   **Core 0:** Runs the main CPU emulation loop (`cpu_exec`) and handles user input from the PS/2 keyboard and NES gamepad.
 *   **Core 1:** Dedicated to real-time, time-critical tasks. It runs an infinite loop that manages:
     *   Video rendering (at ~60Hz).
     *   Audio sample generation and output.
@@ -221,7 +221,7 @@ This division of labor ensures that the demanding CPU emulation does not interfe
 
 ### Windows & Linux (Multi-threaded)
 The host builds (for Windows and Linux) are multi-threaded to separate tasks.
-*   **Main Thread:** Runs the main CPU emulation loop (`exec86`) and handles the window and its events via the MiniFB library.
+*   **Main Thread:** Runs the main CPU emulation loop (`cpu_exec`) and handles the window and its events via the MiniFB library.
 *   **Ticks Thread:** A dedicated thread that acts as the system's clock. It uses high-resolution timers (`QueryPerformanceCounter` on Windows, `clock_gettime` on Linux) to trigger events like PIT timer interrupts, rendering updates, and audio sample generation at the correct frequencies.
 *   **Sound Thread:** A separate thread responsible for communicating with the host operating system's audio API (WaveOut on Windows, a custom backend on Linux) to play the generated sound without blocking the other threads.
 

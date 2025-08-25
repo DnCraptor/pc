@@ -1,4 +1,5 @@
 #include "emulator.h"
+#include <string.h>
 
 #define PIT_MODE_LATCHCOUNT  0
 #define PIT_MODE_LOBYTE 1

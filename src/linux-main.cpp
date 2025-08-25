@@ -733,7 +733,7 @@ int main() {
     emu8950_opl = OPL_new(3579552, SOUND_FREQUENCY);
     blaster_reset();
     sn76489_reset();
-    reset86();
+    cpu_reset();
 
     // Initialize audio system
     if (linux_audio_init(SOUND_FREQUENCY, 2, AUDIO_BUFFER_LENGTH) == 0) {
@@ -751,7 +751,7 @@ int main() {
     pthread_create(&ticks_tid, NULL, ticks_thread, NULL);
 
     while (running) {
-        exec86(32768);  // Reduced from 32768 to allow more frequent audio updates
+        cpu_exec(32768);  // Reduced from 32768 to allow more frequent audio updates
         if (mfb_update(SCREEN, 0) < 0) {
             running = 0;
             break;

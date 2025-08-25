@@ -1,6 +1,7 @@
 #pragma GCC optimize("Ofast")
 #include <stdbool.h>
 #include "emulator.h"
+#include "cpu.h"
 // https://www.phatcode.net/res/218/files/limems40.txt
 // https://www.phatcode.net/res/219/files/xms20.txt
 // http://www.techhelpmanual.com/944-xms_functions.html
@@ -158,8 +159,6 @@ umb_t* get_free_umb_block(uint16_t size) {
 uint32_t xms_available = XMS_MEMORY_SIZE;
 uint8_t xms_handles = 0;
 
-int a20_enabled = 0;
-
 #if !PICO_ON_DEVICE
 uint8_t ALIGN(4, XMS[XMS_MEMORY_SIZE + 4]) = {0};
 static INLINE void xms_move_to(register uint32_t destination, register uint32_t source, register uint32_t length) {
@@ -224,18 +223,18 @@ uint8_t __not_in_flash() xms_handler() {
         case LOCAL_ENABLE_A20: { // Local Enable A20
             CPU_AX = 1; // Success
             CPU_BL = 0;
-            a20_enabled = 1;
+            a20_gate = 1;
             break;
         }
         case GLOBAL_DISABLE_A20:
         case LOCAL_DISABLE_A20: { // Local Disable A20
             CPU_AX = 1; // Success
             CPU_BL = 0;
-            a20_enabled = 0;
+            a20_gate = 0;
             break;
         }
         case QUERY_A20: { // Query A20 (Function 07h):
-            CPU_AX = a20_enabled; // Success
+            CPU_AX = a20_gate; // Success
             break;
         }
 

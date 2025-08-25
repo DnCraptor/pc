@@ -519,7 +519,7 @@ int main(void) {
 
     // Initialize audio and reset emulator
     sn76489_reset();
-    reset86();
+    cpu_reset();
 
     // Initialize mouse control variables
     nespad_read();
@@ -531,7 +531,7 @@ int main(void) {
 
     // Main emulation loop
     while (true) {
-        exec86(tormoz);
+        cpu_exec(tormoz);
 #if !PICO_RP2040
         if (delay) sleep_us(delay);
 #endif
