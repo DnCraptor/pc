@@ -312,6 +312,7 @@ static inline void diskhandler() {
             return;
 
         case 0x02:  // Read sector(s) into memory
+            // printf("read to: %04X:%04X\n", CPU_ES, CPU_BX);
             readdisk(drivenum, CPU_ES, CPU_BX,
                      CPU_CH + (CPU_CL / 64) * 256,  // Cylinder
                      CPU_CL & 63,                    // Sector

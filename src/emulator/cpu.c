@@ -36,6 +36,8 @@
 
 #define MEMORY_RANGE XMS_MEMORY_SIZE
 
+int showops = 0;
+
 int videomode = 3;
 
 // TODO:
@@ -2282,301 +2284,265 @@ void cpu_int15_handler() {
 }
 
 FUNC_INLINE void cpu_intcall(uint8_t intnum, uint8_t source, uint32_t err) {
-    switch (intnum) {
-        case 0x10: {
-            switch (CPU_AH) {
-                case 0x09:
-                case 0x0a:
-                    if (videomode >= 8 && videomode <= 0x13) {
-                        // TODO: char attr?
-                        tga_draw_char(CPU_AL, CURSOR_X, CURSOR_Y, 9);
-                        printf("%c", CPU_AL);
-                        return;
-                    }
-                    break;
-                case 0x0f:
-                    if (videomode < 8) break;
-                    CPU_AL = videomode;
-                    CPU_AH = 80;
-                    CPU_BH = 0;
-                    return;
-                case 0x00:
-                    // http://www.techhelpmanual.com/114-video_modes.html
-                    // http://www.techhelpmanual.com/89-video_memory_layouts.html
-
-                    videomode = CPU_AL & 0x7F;
-
-                    RAM[0x449] = CPU_AL;
-                    RAM[0x44A] = videomode <= 2 || (videomode >= 0x8 && videomode <= 0xa) ? 40 : 80;
-                    RAM[0x44B] = 0;
-                    RAM[0x484] = (25 - 1);
-
-                    if ((CPU_AL & 0x80) == 0x00) {
-                        memset(VIDEORAM, 0x0, VIDEORAM_SIZE);
-                    }
-                    vga_plane_offset = 0;
-                    vga_planar_mode = 0;
-                    tga_offset = 0x8000;
-                    break;
-                case 0x05: /* Select Active Page */ {
-                    if (CPU_AL >= 0x80) {
-                        uint8_t CRTCPU = RAM[BIOS_CRTCPU_PAGE];
-                        switch (CPU_AL) {
-                            case 0x80: /* read CRT/CPU page registers */
-                                CPU_BH = CRTCPU & 7;
-                                CPU_BL = (CRTCPU >> 3) & 7;
-                                break;
-                            case 0x81: /* set CPU page register to value in BL */
-                                CRTCPU = (CRTCPU & 0xc7) | ((CPU_BL & 7) << 3);
-                                break;
-                            case 0x82: /* set CRT page register to value in BH */
-                                CRTCPU = (CRTCPU & 0xf8) | (CPU_BH & 7);
-                                break;
-                            case 0x83: /* set CRT and CPU page registers in BH and BL */
-                                CRTCPU = (CRTCPU & 0xc0) | (CPU_BH & 7) | ((CPU_BL & 7) << 3);
-                                break;
-                        }
-                        tga_portout(0x3df, CRTCPU);
-                        RAM[BIOS_CRTCPU_PAGE] = CRTCPU;
-                        return;
-                    }
-
-                    break;
-                }
-                case 0x10:
-                    switch (CPU_AL) {
-                        case 0x00: {
-                            uint8_t color_index = CPU_BL & 0xF;
-                            uint8_t color_byte = CPU_BH;
-
-                            const uint16_t r = (((color_byte >> 2) & 1) << 1) + (color_byte >> 5 & 1);
-                            const uint16_t g = (((color_byte >> 1) & 1) << 1) + (color_byte >> 4 & 1);
-                            const uint16_t b = (((color_byte >> 0) & 1) << 1) + (color_byte >> 3 & 1);
-
-                            if (videomode <= 0xa) {
-                                tga_palette_map[color_index] = color_byte;
-                            } else {
-                                vga_palette[color_index] = rgb((r * 85), (g * 85), (b * 85));
-#if PICO_ON_DEVICE
-                                graphics_set_palette(color_index, vga_palette[color_index]);
-#endif
-                            }
-                            return;
-                        }
-                        case 0x02: {
-                            uint32_t memloc = CPU_ES * 16 + CPU_DX;
-                            for (int color_index = 0; color_index < 16; color_index++) {
-                                uint8_t color_byte = read86(memloc++);
-                                const uint8_t r = (((color_byte >> 2) & 1) << 1) + (color_byte >> 5 & 1);
-                                const uint8_t g = (((color_byte >> 1) & 1) << 1) + (color_byte >> 4 & 1);
-                                const uint8_t b = (((color_byte >> 0) & 1) << 1) + (color_byte >> 3 & 1);
-
-                                vga_palette[color_index] = rgb((r * 85), (g * 85), (b * 85));
-#if PICO_ON_DEVICE
-                                graphics_set_palette(color_index, vga_palette[color_index]);
-#endif
-                            }
-                            // TODO: Overscan/Border 17th color
-                            return;
-                        }
-                        case 0x03: {
-                            cga_blinking = CPU_BL ? 0x7F : 0xFF;
-                            cga_blinking_lock = !CPU_BL;
-                            //printf("[CPU] INT BL 0x%02x\r\n", CPU_BL);
-                            return;
-                        }
-                        case 0x10: {
-                            // Set One DAC Color Register
-                            vga_palette[CPU_BL] = rgb((CPU_DH & 63) << 2, (CPU_CH & 63) << 2,
-                                                      (CPU_CL & 63) << 2);
-#if PICO_ON_DEVICE
-                            graphics_set_palette(CPU_BL, vga_palette[CPU_BL]);
-#endif
-                            return;
-                        }
-                        case 0x12: {
-                            // set block of DAC color registers               VGA
-                            uint32_t memloc = CPU_ES * 16 + CPU_DX;
-                            for (int color_index = CPU_BX; color_index < ((CPU_BX + CPU_CX) & 0xFF); color_index++) {
-                                vga_palette[color_index] = rgb((read86(memloc++) << 2), (read86(memloc++) << 2),
-                                                               (read86(memloc++) << 2));
-#if PICO_ON_DEVICE
-                                graphics_set_palette(color_index, vga_palette[color_index]);
-#endif
-                            }
-                            return;
-                        }
-                        case 0x15: {
-                            // Read One DAC Color Register
-                            const uint8_t color_index = CPU_BX & 0xFF;
-                            CPU_CL = ((vga_palette[color_index] >> 2)) & 63;
-                            CPU_CH = ((vga_palette[color_index] >> 10)) & 63;
-                            CPU_DH = ((vga_palette[color_index] >> 18)) & 63;
-                            return;
-                        }
-                        case 0x17: {
-                            // Read a Block of DAC Color Registers
-                            uint32_t memloc = CPU_ES * 16 + CPU_DX;
-                            for (int color_index = CPU_BX; color_index < ((CPU_BX + CPU_CX) & 0xFF); color_index++) {
-                                write86(memloc++, ((vga_palette[color_index] >> 2)) & 63);
-                                write86(memloc++, ((vga_palette[color_index] >> 10)) & 63);
-                                write86(memloc++, ((vga_palette[color_index] >> 18)) & 63);
-                            }
-                            return;
-                        }
-                    }
-                    //printf("Unhandled 10h CPU_AL: 0x%x\r\n", CPU_AL);
-                    break;
-                case 0x1A: //get display combination code (ps, vga/mcga)
-                    CPU_AL = 0x1A;
-                    if (ega_vga_enabled) {
-                        CPU_BL = 0x08;
-                    } else {
-                        CPU_BL = 0x05; // MCGA
-                    }
-                    return;
-            }
-            break;
-        }
-        case 0x13:
-            return diskhandler();
-        case 0x15: /* XMS */
-            switch (CPU_AH) {
-                case 0x87: {
-                    //https://github.com/neozeed/himem.sys-2.06/blob/5761f4fc182543b3964fd0d3a236d04bac7bfb50/oemsrc/himem.asm#L690
-                    //                    printf("mem move?! %x %x:%x\n", CPU_CX, CPU_ES, CPU_SI);
-                    CPU_AX = 0;
-                    return;
-                }
-                    return;
-                case 0x88: {
-                    CPU_AX = 64;
-                    return;
-                }
-            }
-            break;
-        /**/
-        case 0x19:
-#if PICO_ON_DEVICE
-            insertdisk(0, "\\XT\\fdd0.img");
-            insertdisk(1, "\\XT\\fdd1.img");
-            insertdisk(128, "\\XT\\hdd.img");
-            insertdisk(129, "\\XT\\hdd2.img");
-#else
-            insertdisk(0, "../fdd0.img");
-            insertdisk(1, "../fdd1.img");
-            insertdisk(128, "../hdd.img");
-            insertdisk(129, "../hdd2.img");
-#endif
-            if (1) {
-                /* PCjr reserves the top of its internal 128KB of RAM for video RAM.  * Sidecars can extend it past 128KB but it
-                 * requires DOS drivers or TSRs to modify the MCB chain so that it a) marks the video memory as reserved and b)
-                 * creates a new free region above the video RAM region.
-                 *
-                 * Therefore, only subtract 16KB if 128KB or less is configured for this machine.
-                 *
-                 * Note this is not speculation, it's there in the PCjr BIOS source code:
-                 * [http://hackipedia.org/browse.cgi/Computer/Platform/PC%2c%20IBM%20compatible/Video/PCjr/IBM%20Personal%20Computer%20PCjr%20Hardware%20Reference%20Library%20Technical%20Reference%20%281983%2d11%29%20First%20Edition%20Revised%2epdf]
-                 * ROM BIOS source code page A-16 */
-
-                writew86(BIOS_TRUE_MEMORY_SIZE, 640 - 16);
-#if !PICO_ON_DEVICE
-                time_t uts = time(NULL);
-                struct tm *t = localtime(&uts);
-
-                writew86(0x46E, t->tm_hour); // Hour bcd
-                writew86(0x46C, t->tm_min * 1092 + t->tm_sec * 18); // minute + second
-#endif
-            }
-            break;
-        case 0x1A: /* Timer I/O RTC */
-            switch (CPU_AH) {
-                case 0x02: /* 02H: Read Time from Real-Time Clock */
-                    CPU_CX = 0x2259;
-                    CPU_DX = 0x0001;
-                    cf = 0;
-                    return;
-                case 0x04: /* 04H: Read Date from Real-Time Clock */
-                    CPU_CX = 0x2024;
-                    CPU_DX = 0x1024;
-                    CPU_AH = 0;
-                    cf = 0;
-                    return;
-            }
-            break;
-        case 0x2F: /* Multiplex Interrupt */
-            switch (CPU_AX) {
-                /* XMS */
-                case 0x4300:
-                    CPU_AL = 0x80;
-                    return;
-                case 0x4310: {
-                    CPU_ES = XMS_FN_CS; // to be handled by DOS memory manager using
-                    CPU_BX = XMS_FN_IP; // CALL FAR ES:BX
-                    return;
-                default:
-                    if (redirector_handler()) {
-                        return;
-                    }
-                }
-            }
-            break;
-    }
-
-
 	uint32_t idtentry, idtptr, gdtentry, new_esp, old_esp, old_flags, push_eip;
 	uint16_t selector, idtseg, new_ss, old_ss;
 	uint8_t access, gatetype, dpl, present;
 	uint8_t gdtaccess, gdtdpl;
 	if (!protected) { //real mode
-		//Call HLE interrupt, if one is assigned
-		/*if (strcmp(usemachine, "generic_xt") == 0) if (intnum == 0x15) { //hack to get an int 15h with the generic XT BIOS
-			cpu_int15_handler();
-			return;
-		}*/
-		/*if (intnum == 0x15 && regs.wordregs[regax] == 0xE820) {
-			uint32_t addr32;
-			addr32 = segcache[reges] + regs.wordregs[regdi];
-			printf("0xE820 EBX = %08X, ECX = %08X, buffer = %08X\n", regs.longregs[regebx], regs.longregs[regecx], addr32);
-			switch (regs.longregs[regebx]) {
-			case 0:
-				cpu_writel(addr32, 0);
-				cpu_writel(addr32 + 4, 0);
-				cpu_writel(addr32 + 8, 0x9FC00);
-				cpu_writel(addr32 + 12, 0);
-				cpu_writew(addr32 + 16, 1);
-				regs.longregs[regebx] = 0x02938475;
-				break;
-			case 0x02938475:
-				cpu_writel(addr32, 0x9FC00);
-				cpu_writel(addr32 + 4, 0);
-				cpu_writel(addr32 + 8, 0x400);
-				cpu_writel(addr32 + 12, 0);
-				cpu_writew(addr32 + 16, 2);
-				regs.longregs[regebx] = 0x91827364;
-				break;
-			case 0x91827364:
-				cpu_writel(addr32, 0xF0000);
-				cpu_writel(addr32 + 4, 0);
-				cpu_writel(addr32 + 8, 0x10000);
-				cpu_writel(addr32 + 12, 0);
-				cpu_writew(addr32 + 16, 2);
-				regs.longregs[regebx] = 0x56473829;
-				break;
-			case 0x56473829:
-				cpu_writel(addr32, 0x100000);
-				cpu_writel(addr32 + 4, 0);
-				cpu_writel(addr32 + 8, 0xFF00000);
-				cpu_writel(addr32 + 12, 0);
-				cpu_writew(addr32 + 16, 1);
-				regs.longregs[regebx] = 0;
+		switch (intnum) {
+			case 0x10: {
+				switch (CPU_AH) {
+					case 0x09:
+					case 0x0a:
+						if (videomode >= 8 && videomode <= 0x13) {
+							// TODO: char attr?
+							tga_draw_char(CPU_AL, CURSOR_X, CURSOR_Y, 9);
+							printf("%c", CPU_AL);
+							return;
+						}
+						break;
+					case 0x0f:
+						if (videomode < 8) break;
+						CPU_AL = videomode;
+						CPU_AH = 80;
+						CPU_BH = 0;
+						return;
+					case 0x00:
+						// http://www.techhelpmanual.com/114-video_modes.html
+						// http://www.techhelpmanual.com/89-video_memory_layouts.html
+
+						videomode = CPU_AL & 0x7F;
+
+						RAM[0x449] = CPU_AL;
+						RAM[0x44A] = videomode <= 2 || (videomode >= 0x8 && videomode <= 0xa) ? 40 : 80;
+						RAM[0x44B] = 0;
+						RAM[0x484] = (25 - 1);
+
+						if ((CPU_AL & 0x80) == 0x00) {
+							memset(VIDEORAM, 0x0, VIDEORAM_SIZE);
+						}
+						vga_plane_offset = 0;
+						vga_planar_mode = 0;
+						tga_offset = 0x8000;
+						break;
+					case 0x05: /* Select Active Page */ {
+						if (CPU_AL >= 0x80) {
+							uint8_t CRTCPU = RAM[BIOS_CRTCPU_PAGE];
+							switch (CPU_AL) {
+								case 0x80: /* read CRT/CPU page registers */
+									CPU_BH = CRTCPU & 7;
+									CPU_BL = (CRTCPU >> 3) & 7;
+									break;
+								case 0x81: /* set CPU page register to value in BL */
+									CRTCPU = (CRTCPU & 0xc7) | ((CPU_BL & 7) << 3);
+									break;
+								case 0x82: /* set CRT page register to value in BH */
+									CRTCPU = (CRTCPU & 0xf8) | (CPU_BH & 7);
+									break;
+								case 0x83: /* set CRT and CPU page registers in BH and BL */
+									CRTCPU = (CRTCPU & 0xc0) | (CPU_BH & 7) | ((CPU_BL & 7) << 3);
+									break;
+							}
+							tga_portout(0x3df, CRTCPU);
+							RAM[BIOS_CRTCPU_PAGE] = CRTCPU;
+							return;
+						}
+
+						break;
+					}
+					case 0x10:
+						switch (CPU_AL) {
+							case 0x00: {
+								uint8_t color_index = CPU_BL & 0xF;
+								uint8_t color_byte = CPU_BH;
+
+								const uint16_t r = (((color_byte >> 2) & 1) << 1) + (color_byte >> 5 & 1);
+								const uint16_t g = (((color_byte >> 1) & 1) << 1) + (color_byte >> 4 & 1);
+								const uint16_t b = (((color_byte >> 0) & 1) << 1) + (color_byte >> 3 & 1);
+
+								if (videomode <= 0xa) {
+									tga_palette_map[color_index] = color_byte;
+								} else {
+									vga_palette[color_index] = rgb((r * 85), (g * 85), (b * 85));
+	#if PICO_ON_DEVICE
+									graphics_set_palette(color_index, vga_palette[color_index]);
+	#endif
+								}
+								return;
+							}
+							case 0x02: {
+								uint32_t memloc = CPU_ES * 16 + CPU_DX;
+								for (int color_index = 0; color_index < 16; color_index++) {
+									uint8_t color_byte = read86(memloc++);
+									const uint8_t r = (((color_byte >> 2) & 1) << 1) + (color_byte >> 5 & 1);
+									const uint8_t g = (((color_byte >> 1) & 1) << 1) + (color_byte >> 4 & 1);
+									const uint8_t b = (((color_byte >> 0) & 1) << 1) + (color_byte >> 3 & 1);
+
+									vga_palette[color_index] = rgb((r * 85), (g * 85), (b * 85));
+	#if PICO_ON_DEVICE
+									graphics_set_palette(color_index, vga_palette[color_index]);
+	#endif
+								}
+								// TODO: Overscan/Border 17th color
+								return;
+							}
+							case 0x03: {
+								cga_blinking = CPU_BL ? 0x7F : 0xFF;
+								cga_blinking_lock = !CPU_BL;
+								//printf("[CPU] INT BL 0x%02x\r\n", CPU_BL);
+								return;
+							}
+							case 0x10: {
+								// Set One DAC Color Register
+								vga_palette[CPU_BL] = rgb((CPU_DH & 63) << 2, (CPU_CH & 63) << 2,
+														(CPU_CL & 63) << 2);
+	#if PICO_ON_DEVICE
+								graphics_set_palette(CPU_BL, vga_palette[CPU_BL]);
+	#endif
+								return;
+							}
+							case 0x12: {
+								// set block of DAC color registers               VGA
+								uint32_t memloc = CPU_ES * 16 + CPU_DX;
+								for (int color_index = CPU_BX; color_index < ((CPU_BX + CPU_CX) & 0xFF); color_index++) {
+									vga_palette[color_index] = rgb((read86(memloc++) << 2), (read86(memloc++) << 2),
+																(read86(memloc++) << 2));
+	#if PICO_ON_DEVICE
+									graphics_set_palette(color_index, vga_palette[color_index]);
+	#endif
+								}
+								return;
+							}
+							case 0x15: {
+								// Read One DAC Color Register
+								const uint8_t color_index = CPU_BX & 0xFF;
+								CPU_CL = ((vga_palette[color_index] >> 2)) & 63;
+								CPU_CH = ((vga_palette[color_index] >> 10)) & 63;
+								CPU_DH = ((vga_palette[color_index] >> 18)) & 63;
+								return;
+							}
+							case 0x17: {
+								// Read a Block of DAC Color Registers
+								uint32_t memloc = CPU_ES * 16 + CPU_DX;
+								for (int color_index = CPU_BX; color_index < ((CPU_BX + CPU_CX) & 0xFF); color_index++) {
+									write86(memloc++, ((vga_palette[color_index] >> 2)) & 63);
+									write86(memloc++, ((vga_palette[color_index] >> 10)) & 63);
+									write86(memloc++, ((vga_palette[color_index] >> 18)) & 63);
+								}
+								return;
+							}
+						}
+						//printf("Unhandled 10h CPU_AL: 0x%x\r\n", CPU_AL);
+						break;
+					case 0x1A: //get display combination code (ps, vga/mcga)
+						CPU_AL = 0x1A;
+						if (ega_vga_enabled) {
+							CPU_BL = 0x08;
+						} else {
+							CPU_BL = 0x05; // MCGA
+						}
+						return;
+				}
 				break;
 			}
-			regs.longregs[regecx] = 0x14;
-			regs.longregs[regeax] = 0x534D4150;
-			cf = 0;
-			return;
-		}*/
+			case 0x13:
+				return diskhandler();
+			case 0x15: /* XMS */
+				switch (CPU_AH) {
+					case 0x87: {
+						//https://github.com/neozeed/himem.sys-2.06/blob/5761f4fc182543b3964fd0d3a236d04bac7bfb50/oemsrc/himem.asm#L690
+						//                    printf("mem move?! %x %x:%x\n", CPU_CX, CPU_ES, CPU_SI);
+						CPU_AX = 0;
+						return;
+					}
+						return;
+					case 0x88: {
+						CPU_AX = 64;
+						return;
+					}
+				}
+				break;
+			/**/
+			case 0x19:
+	#if PICO_ON_DEVICE
+				insertdisk(0, "\\XT\\fdd0.img");
+				insertdisk(1, "\\XT\\fdd1.img");
+				insertdisk(128, "\\XT\\hdd.img");
+				insertdisk(129, "\\XT\\hdd2.img");
+	#else
+				insertdisk(0, "../fdd0.img");
+				insertdisk(1, "../fdd1.img");
+				insertdisk(128, "../hdd.img");
+				insertdisk(129, "../hdd2.img");
+	#endif
+				if (1) {
+					/* PCjr reserves the top of its internal 128KB of RAM for video RAM.  * Sidecars can extend it past 128KB but it
+					* requires DOS drivers or TSRs to modify the MCB chain so that it a) marks the video memory as reserved and b)
+					* creates a new free region above the video RAM region.
+					*
+					* Therefore, only subtract 16KB if 128KB or less is configured for this machine.
+					*
+					* Note this is not speculation, it's there in the PCjr BIOS source code:
+					* [http://hackipedia.org/browse.cgi/Computer/Platform/PC%2c%20IBM%20compatible/Video/PCjr/IBM%20Personal%20Computer%20PCjr%20Hardware%20Reference%20Library%20Technical%20Reference%20%281983%2d11%29%20First%20Edition%20Revised%2epdf]
+					* ROM BIOS source code page A-16 */
+
+					writew86(BIOS_TRUE_MEMORY_SIZE, 640 - 16);
+	#if !PICO_ON_DEVICE
+					time_t uts = time(NULL);
+					struct tm *t = localtime(&uts);
+
+					writew86(0x46E, t->tm_hour); // Hour bcd
+					writew86(0x46C, t->tm_min * 1092 + t->tm_sec * 18); // minute + second
+	#endif
+				}
+				break;
+			case 0x1A: /* Timer I/O RTC */
+				switch (CPU_AH) {
+					case 0x02: /* 02H: Read Time from Real-Time Clock */
+						CPU_CX = 0x2259;
+						CPU_DX = 0x0001;
+						cf = 0;
+						return;
+					case 0x04: /* 04H: Read Date from Real-Time Clock */
+						CPU_CX = 0x2024;
+						CPU_DX = 0x1024;
+						CPU_AH = 0;
+						cf = 0;
+						return;
+				}
+				break;
+			case 0x21:
+				printf("INT 21h [%04X]", CPU_AX);
+				if (CPU_AX == 0x3D00) { // open file
+					printf("(open): '");
+					uint32_t a = ((uint32_t)(CPU_DS) << 4) + CPU_DX;
+					uint8_t c = read86( a++);
+					while(c) {
+						printf("%c", c);
+						c = read86( a++ );
+					}
+					printf("'");
+				}
+				printf("\n");
+				break;
+			case 0x2F: /* Multiplex Interrupt */
+				switch (CPU_AX) {
+					/* XMS */
+					case 0x4300:
+						CPU_AL = 0x80;
+						return;
+					case 0x4310: {
+						CPU_ES = XMS_FN_CS; // to be handled by DOS memory manager using
+						CPU_BX = XMS_FN_IP; // CALL FAR ES:BX
+						return;
+					default:
+						if (redirector_handler()) {
+							return;
+						}
+					}
+				}
+				break;
+		}
 		if (int_callback[intnum] != NULL) {
 			(*int_callback[intnum])(intnum);
 			return;
@@ -3148,8 +3114,6 @@ int cpu_interruptCheck(int slave) {
 }
 */
 uint32_t firstip;
-int showops = 0;
-
 
 void op_ext_00() {
 	modregrm();
@@ -4655,8 +4619,6 @@ FUNC_INLINE void cpu_extop() {
 
 	(*opcode_ext_table[opcode])();
 }
-
-void fpu_exec();
 
 /* 00 ADD Eb Gb */
 void op_00() {
@@ -7424,7 +7386,6 @@ void op_D6_D7() {
 void op_fpu() {
 	//if (have387) {
 	if ((cr[0] & 4) == 0) {
-		//fpu_exec();
 		/*modregrm();
 		if (mode == 3) {
 			fpu_reg_op(NULL, 0);
@@ -7822,7 +7783,7 @@ void cpu_exec(uint32_t execloops) {
 
 	uint32_t loopcount;
 	uint8_t docontinue;
-	uint8_t bufop[12];
+	///uint8_t bufop[12];
 	uint8_t regscopy[512];
 	uint8_t segscopy[512];
 	uint8_t cachecopy[512];
@@ -7883,15 +7844,34 @@ void cpu_exec(uint32_t execloops) {
 		}
 		docontinue = 0;
 		firstip = segis32[regcs] ? ip : ip & 0xFFFF;
-		if (showops) for (uint32_t i = 0; i < 12; i++) {
-			bufop[i] = cpu_read(segcache[regcs] + ip + i);
-		}
+	///	if (showops) for (uint32_t i = 0; i < 12; i++) {
+	///		bufop[i] = cpu_read(segcache[regcs] + ip + i);
+	///	}
 
 		while (!docontinue) {
 			if (!segis32[regcs] || v86f) ip = ip & 0xFFFF;
 			savecs = segregs[regcs];
 			saveip = ip;
-			opcode = getmem8(segcache[regcs], ip);
+            // W/A-hack: last byte of interrupts table (actually should not be ever used as CS:IP)
+            if (unlikely((segcache[regcs] == (XMS_FN_CS << 4) && ip == XMS_FN_IP))) {
+                // hook for XMS
+                opcode = xms_handler(); // always returns RET TODO: far/short ret?
+			} else {
+				opcode = getmem8(segcache[regcs], ip);
+			}
+			uint32_t a = segcache[regcs] + ip;
+			if (a == 0x07C00) {
+				printf("Start boot sector\n");
+			}
+			if (a == 0x00700) {
+				printf("Start IO.SYS %02x %02x %02x %02x %02x\n", read86(a), read86(a+1), read86(a+2), read86(a+3), read86(a+4));
+			}
+			if (a == 0x00838) {
+				printf("0838\n");
+			}
+			if (a == 0x0090f) {
+				printf("EMS: %04x0h\n", CPU_DX);
+			}
 			StepIP(1);
 
 			switch (opcode) {
@@ -7964,6 +7944,7 @@ void cpu_exec(uint32_t execloops) {
 
 		//if (startcpl == 3) showops = 1; else showops = 0;
 
+     	/*
 		if (showops) { // || doexception) {
 			uint32_t i;
 			//if (isoper32) printf("32-bit operand %02X\n", opcode);
@@ -7972,7 +7953,6 @@ void cpu_exec(uint32_t execloops) {
 			if (!reptype || (reptype && !regs.wordregs[regcx])) {
 				//uint8_t buf[32];
 				printf("ud\n");
-				/*
 				ud_t ud;
 				ud_init(&ud);
 				if (protected && !v86f)
@@ -8000,9 +7980,9 @@ void cpu_exec(uint32_t execloops) {
 					segregs[regcs], segregs[regds], segregs[reges], segregs[regss], segregs[regfs], segregs[reggs]);
 				//cpu_debug_state();
 				//getch();
-				*/
 			}
 		}
+		*/
 
 		if (doexception) {
 			// EXTREME HACK ALERT

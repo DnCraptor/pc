@@ -197,4 +197,5 @@ extern uint16_t segregs[6];
 #define CPU_ES segregs[reges]
 #define CPU_SI segregs[regsi]
 #define CPU_DI segregs[regdi]
+#define CPU_CS segregs[regcs]
 #endif
